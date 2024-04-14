@@ -6,10 +6,11 @@
 /*********************
  *      INCLUDES
  *********************/
-#include "lv_draw.h"
+#include "../core/lv_obj.h"
 #include "lv_draw_triangle.h"
 #include "../misc/lv_math.h"
-#include "../misc/lv_mem.h"
+#include "../stdlib/lv_mem.h"
+#include "../stdlib/lv_string.h"
 
 /*********************
  *      DEFINES
@@ -35,27 +36,43 @@
  *   GLOBAL FUNCTIONS
  **********************/
 
-/**
- * Draw a polygon. Only convex polygons are supported
- * @param points an array of points
- * @param point_cnt number of points
- * @param clip_area polygon will be drawn only in this area
- * @param draw_dsc pointer to an initialized `lv_draw_rect_dsc_t` variable
- */
-void lv_draw_polygon(const lv_point_t points[], uint16_t point_cnt, const lv_area_t * clip_area,
-                     const lv_draw_rect_dsc_t * draw_dsc)
+void lv_draw_triangle_dsc_init(lv_draw_triangle_dsc_t * dsc)
 {
-
-    const lv_draw_backend_t * backend = lv_draw_backend_get();
-    backend->draw_polygon(points, point_cnt, clip_area, draw_dsc);
+    LV_PROFILER_BEGIN;
+    lv_memzero(dsc, sizeof(lv_draw_triangle_dsc_t));
+    dsc->bg_color = lv_color_white();
+    dsc->bg_grad.stops[0].color = lv_color_white();
+    dsc->bg_grad.stops[1].color = lv_color_black();
+    dsc->bg_grad.stops[1].frac = 0xFF;
+    dsc->bg_grad.stops_count = 2;
+    dsc->bg_opa = LV_OPA_COVER;
+    LV_PROFILER_END;
 }
 
-void lv_draw_triangle(const lv_point_t points[], const lv_area_t * clip_area,
-                      const lv_draw_rect_dsc_t * draw_dsc)
+lv_draw_triangle_dsc_t * lv_draw_task_get_triangle_dsc(lv_draw_task_t * task)
 {
+    return task->type == LV_DRAW_TASK_TYPE_TRIANGLE ? (lv_draw_triangle_dsc_t *)task->draw_dsc : NULL;
+}
 
-    const lv_draw_backend_t * backend = lv_draw_backend_get();
-    backend->draw_polygon(points, 3, clip_area, draw_dsc);
+void lv_draw_triangle(lv_layer_t * layer, const lv_draw_triangle_dsc_t * dsc)
+{
+    if(dsc->bg_opa <= LV_OPA_MIN) return;
+
+    LV_PROFILER_BEGIN;
+    lv_area_t a;
+    a.x1 = (int32_t)LV_MIN3(dsc->p[0].x, dsc->p[1].x, dsc->p[2].x);
+    a.y1 = (int32_t)LV_MIN3(dsc->p[0].y, dsc->p[1].y, dsc->p[2].y);
+    a.x2 = (int32_t)LV_MAX3(dsc->p[0].x, dsc->p[1].x, dsc->p[2].x);
+    a.y2 = (int32_t)LV_MAX3(dsc->p[0].y, dsc->p[1].y, dsc->p[2].y);
+
+    lv_draw_task_t * t = lv_draw_add_task(layer, &a);
+
+    t->draw_dsc = lv_malloc(sizeof(*dsc));
+    lv_memcpy(t->draw_dsc, dsc, sizeof(*dsc));
+    t->type = LV_DRAW_TASK_TYPE_TRIANGLE;
+
+    lv_draw_finalize_task_creation(layer, t);
+    LV_PROFILER_END;
 }
 
 /**********************
